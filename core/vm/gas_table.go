@@ -93,6 +93,7 @@ var (
 	gasReturnDataCopy = memoryCopierGas(2)
 )
 
+// 计算sstore用燃料费
 func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		y, x    = stack.Back(1), stack.Back(0)

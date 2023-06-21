@@ -64,12 +64,15 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
+//固有成本
 func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028 bool, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
+		// 创建合约53 * 1000
 		gas = params.TxGasContractCreation
 	} else {
+		// 合约调用 21 * 1000
 		gas = params.TxGas
 	}
 	dataLen := uint64(len(data))
@@ -77,26 +80,28 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation b
 	if dataLen > 0 {
 		// Zero and non-zero bytes are priced differently
 		var nz uint64
+		// 根据data中有多少0， 来计算gas费用
 		for _, byt := range data {
 			if byt != 0 {
 				nz++
 			}
 		}
 		// Make sure we don't exceed uint64 for all data combinations
-		nonZeroGas := params.TxDataNonZeroGasFrontier
+		nonZeroGas := params.TxDataNonZeroGasFrontier // 68
 		if isEIP2028 {
-			nonZeroGas = params.TxDataNonZeroGasEIP2028
+			nonZeroGas = params.TxDataNonZeroGasEIP2028 // 16
 		}
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
 			return 0, ErrGasUintOverflow
 		}
-		gas += nz * nonZeroGas
+		gas += nz * nonZeroGas // non-zero bytes 按照16gas去计算
 
 		z := dataLen - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
 			return 0, ErrGasUintOverflow
 		}
-		gas += z * params.TxDataZeroGas
+		gas += z * params.TxDataZeroGas // zero字节按照4gas去计算
+		// gas used = 4 * zero bytes + 16 * non-zero bytes
 
 		if isContractCreation && isEIP3860 {
 			lenWords := toWordSize(dataLen)
@@ -227,6 +232,7 @@ func (st *StateTransition) to() common.Address {
 	return *st.msg.To
 }
 
+// 从调用者账户减去gas * gas price(修改状态树)
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
 	mgval = mgval.Mul(mgval, st.msg.GasPrice)
@@ -377,6 +383,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
 	}
 
+	// 退还多余的gas
 	if !rules.IsLondon {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
 		st.refundGas(params.RefundQuotient)
@@ -396,6 +403,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
+		// 向打包交易的矿工添加手续费
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
 	}
 
@@ -408,6 +416,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {
 	// Apply refund counter, capped to a refund quotient
+	// 退款， 原来是退款一半
 	refund := st.gasUsed() / refundQuotient
 	if refund > st.state.GetRefund() {
 		refund = st.state.GetRefund()

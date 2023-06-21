@@ -106,11 +106,14 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
-	in.evm.depth++
-	defer func() { in.evm.depth-- }()
+	in.evm.depth++                    //深度+1
+	defer func() { in.evm.depth-- }() // 函数结束调用， 深度-1
 
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
+	// 保证readonly只有在我们不在readonly的时候才能设置成readonly
+	// 这也保证了readonly不会子调用移除。。。
+	// 没看懂。 反正就是尽量readonly， 除非有明确信号
 	if readOnly && !in.readOnly {
 		in.readOnly = true
 		defer func() { in.readOnly = false }()
@@ -121,6 +124,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
+	//没有代码就返回
+	// 也就是input为0，就不执行
 	if len(contract.Code) == 0 {
 		return nil, nil
 	}
@@ -176,9 +181,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
-		op = contract.GetOp(pc)
-		operation := in.table[op]
-		cost = operation.constantGas // For tracing
+		// 从byte数组里取出op
+		op = contract.GetOp(pc) // pc = pointer current
+
+		// JumpTable是一个Config结构体的256数组
+		// 数组里面都是operation结构体
+		operation := in.table[op] // 获取operation
+		cost = operation.constantGas      // For tracing, 静态gas消耗
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}

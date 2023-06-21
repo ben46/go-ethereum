@@ -247,8 +247,17 @@ func newHomesteadInstructionSet() JumpTable {
 // that can be executed during the frontier phase.
 func newFrontierInstructionSet() JumpTable {
 	tbl := JumpTable{
+		// type operation struct {
+		// 	execute     executionFunc
+		// 	constantGas uint64
+		// 	dynamicGas  gasFunc
+		// 	minStack int
+		// 	maxStack int
+		// 	memorySize memorySizeFunc
+		// }
+
 		STOP: {
-			execute:     opStop,
+			execute:     opStop, // 函数闭包
 			constantGas: 0,
 			minStack:    minStack(0, 0),
 			maxStack:    maxStack(0, 0),
@@ -977,7 +986,7 @@ func newFrontierInstructionSet() JumpTable {
 		},
 		LOG0: {
 			execute:    makeLog(0),
-			dynamicGas: makeGasLog(0),
+			dynamicGas: makeGasLog(0), // 动态gas，根据分配的内存大小来计算
 			minStack:   minStack(2, 0),
 			maxStack:   maxStack(2, 0),
 			memorySize: memoryLog,
