@@ -19,13 +19,13 @@ package snapshot
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/slices"
 )
 
-// weightedIterator is a iterator with an assigned weight. It is used to prioritise
+// weightedIterator is an iterator with an assigned weight. It is used to prioritise
 // which account or storage slot is the correct one if multiple iterators find the
 // same one (modified in multiple consecutive blocks).
 type weightedIterator struct {
@@ -33,19 +33,25 @@ type weightedIterator struct {
 	priority int
 }
 
-func (it *weightedIterator) Less(other *weightedIterator) bool {
+func (it *weightedIterator) Cmp(other *weightedIterator) int {
 	// Order the iterators primarily by the account hashes
 	hashI := it.it.Hash()
 	hashJ := other.it.Hash()
 
 	switch bytes.Compare(hashI[:], hashJ[:]) {
 	case -1:
-		return true
+		return -1
 	case 1:
-		return false
+		return 1
 	}
 	// Same account/storage-slot in multiple layers, split by priority
-	return it.priority < other.priority
+	if it.priority < other.priority {
+		return -1
+	}
+	if it.priority > other.priority {
+		return 1
+	}
+	return 0
 }
 
 // fastIterator is a more optimized multi-layer iterator which maintains a
@@ -155,9 +161,7 @@ func (fi *fastIterator) init() {
 		}
 	}
 	// Re-sort the entire list
-	slices.SortFunc(fi.iterators, func(a, b *weightedIterator) bool {
-		return a.Less(b)
-	})
+	slices.SortFunc(fi.iterators, func(a, b *weightedIterator) int { return a.Cmp(b) })
 	fi.initiated = false
 }
 
